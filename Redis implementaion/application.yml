@@ -1,0 +1,130 @@
+server:
+  port: 8080
+  compression:
+    enabled: true
+
+spring:
+  datasource:
+    username: ${SECRET_RDS_SHIPPING_USER_USERNAME}
+    password: ${SECRET_RDS_SHIPPING_USER_PASSWORD}
+  r2dbc:
+    writer:
+      url: r2dbc:postgresql://${SECRET_RDS_SHIPPING_USER_USERNAME}:${SECRET_RDS_SHIPPING_USER_PASSWORD}@${POSTGRES_WRITER_HOST}:${POSTGRES_PORT}/${POSTGRES_NAME}
+      pool:
+        initial-size: ${POSTGRES_WRITER_INITIAL_SIZE:10}
+        max-size: ${POSTGRES_WRITER_MAX_SIZE:20}
+        max-idle-time-minutes: ${POSTGRES_WRITER_MAX_IDLE_TIME_MIN:30}
+        max-create-conn-time-seconds: ${POSTGRES_WRITER_MAX_CREATE_CONN_TIME_SEC:10}
+    reader:
+      url: r2dbc:postgresql://${SECRET_RDS_SHIPPING_USER_USERNAME}:${SECRET_RDS_SHIPPING_USER_PASSWORD}@${POSTGRES_READER_HOST}:${POSTGRES_PORT}/${POSTGRES_NAME}
+      pool:
+        initial-size: ${POSTGRES_READER_INITIAL_SIZE:10}
+        max-size: ${POSTGRES_READER_MAX_SIZE:20}
+        max-idle-time-minutes: ${POSTGRES_READER_MAX_IDLE_TIME_MIN:30}
+        max-create-conn-time-seconds: ${POSTGRES_READER_MAX_CREATE_CONN_TIME_SEC:10}
+  flyway:
+    enabled: true
+    url: jdbc:postgresql://${POSTGRES_WRITER_HOST}:${POSTGRES_PORT}/${POSTGRES_NAME}?user=${SECRET_RDS_SHIPPING_USER_USERNAME}&password=${SECRET_RDS_SHIPPING_USER_PASSWORD}
+    locations: ${DB_MIGRATION_PATH}
+  redis:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT}
+  main:
+    web-application-type: reactive
+management:
+  metrics:
+    web:
+      client:
+        request:
+          metric-name: afn_fulfilment_service_http_client_requests
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,info
+  health:
+    r2dbc:
+      enabled: false
+  info:
+    env:
+      enabled: true
+logging:
+  level:
+    com.adidas.next.shippingapi: ${LOGGING_LEVEL_API:INFO}
+    org:
+      postgres: ERROR
+  env: local
+  leanx-id: af1ddeb1-070c-43b6-8cd4-82c60b18e1b8
+  logBody: true
+
+deliverypromise:
+  host: ${DPE_HOST}
+  uri: ${DPE_URI}
+  appid: ${SECRET_DPE_STH_APPID}
+deliverypromise-ms:
+  host: ${DPE_MS_HOST}
+  uri: ${DPE_MS_URI}
+  x-api-key: ${SECRET_DPE_MS_API_KEY}
+dpe-failover:
+  host: ${DPE_FAILOVER_HOST}
+  uri: ${DPE_FAILOVER_URI}
+  appid: ${SECRET_DPE_FAILOVER_APPID}
+cnc-dpe:
+  host: ${CNC_HOST}
+  uri: ${CNC_URI}
+  api-id: ${SECRET_DPE_CNC_APPID}
+ssm-store:
+  host: ${SSM_STORE_HOST}
+  uri: ${SSM_STORE_URI}
+  x-api-key: ${SECRET_SSM_STORE_APIKEY}
+  secret: ${SECRET_SSM_STORE_SECRET}
+  radius: ${SSM_STORE_RADIUS}
+  page: ${SSM_STORE_PAGE}
+  pageSize: ${SSM_STORE_PAGE_SIZE}
+pudo-aggregator:
+  host: ${PUDO_AGG_HOST}
+  uri: ${PUDO_AGG_URI}
+  radius: ${PUDO_AGG_RADIUS}
+  authorization: ${SECRET_PUDO_AGG_AUTHORIZATION}
+pudo-id-aggregator:
+  host: ${PUDO_AGG_HOST}
+  uri: ${PUDO_ID_AGG_URI}
+pudo-aggregator-store:
+  host: ${PUDO_AGG_HOST}
+  uri: ${PUDO_AGG_STORE_URI}
+  authorization: ${SECRET_PUDO_AGG_AUTHORIZATION}
+  page:  ${PUDO_AGG_STORE_PAGE}
+  pageSize: ${PUDO_AGG_STORE_PAGE_SIZE}
+geocode:
+  host: ${GOOGLE_API_HOST}
+  uri: ${GOOGLE_API_URI}
+  key: ${SECRET_GOOGLE_API_KEY}
+
+client:
+  retries: ${CONNECT_RETRIES:3}
+  connect-timeout: ${CONNECT_TIMEOUT:2000}
+  idle-timeout: ${IDLE_TIMEOUT:180000}
+  retry-delay-milis: ${RETRY_DELAY_MILIS:400}
+  response-timeout: ${RESPONSE_TIMEOUT:3000}
+  dpe-response-timeout: ${DPE_RESPONSE_TIMEOUT:10000}
+  
+cache-expiry-seconds: ${CACHE_EXPIRY_SECONDS:300}
+
+info:
+  app:
+    env: ${ENVIRONMENT}
+    git_commit: ${GIT_COMMIT}
+    image: ${IMAGE}
+    db_name: ${POSTGRES_NAME}
+
+address-lines-postbox-config:
+  json-content: ${ADDRESS_LINES_POSTBOX-JSON-CONTENT}
+
+usps-shipping-method-config:
+  carriers: ${USPS-CARRIERS}
+  channels: ${CHANNELS}
+
+military-states-config:
+  json-content: ${MILITARY-STATES-JSON-CONTENT}

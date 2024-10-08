@@ -1,0 +1,29 @@
+# REGION scoped values - high precedence (on match, overwrites both DEFAULT and REGION scoped values)
+global:
+  hostname: stg-com-next.api.3stripes.io
+  postgresArgs: "ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
+  postgresWriterHost: "commerce-next-postgresql-stg-eu-west.cluster-cbcbgi1p4kmj.eu-west-1.rds.amazonaws.com"
+  postgresReaderHost: "commerce-next-postgresql-stg-eu-west.cluster-ro-cbcbgi1p4kmj.eu-west-1.rds.amazonaws.com"
+  postgresWriterInitialSize: "10"
+  postgresWriterMaxSize: "500"
+  postgresWriterMaxIdleTimeMin: "30"
+  postgresWriterMaxCreateConnTimeSec: "10"
+  postgresReaderInitialSize: "10"
+  postgresReaderMaxSize: "500"
+  postgresReaderMaxIdleTimeMin: "30"
+  postgresReaderMaxCreateConnTimeSec: "10"
+  dpe_host: https://eaiacc.omnihub.3stripes.net
+  dpe_uri: eai/delivery/options/V2
+  dpe_ms_host: https://acc-omnideliverypromise.api.3stripes.io
+  dpe_ms_uri: getDeliveryOptions/v2
+  dpe_failover_host: https://dev-omnihub.api.3stripes.io
+  dpe_failover_uri: deliveryPromise/V2
+  cncHost: https://eaiacc.omnihub.3stripes.net
+  cncUri: /eai/clickncollect/availability/V2
+  ssmStoreHost: https://stg-omni.api.3stripes.io
+  ssmStoreUri: ssm/stores
+  pudoAggregatorHost: http://staging-tf-pudo-aggregator.ecom-tf.svc.cluster.local:8000
+  pudoAggregatorLocationSearchURI: location/search
+  pudoIdAggregatorLocationSearchURI: location
+  pudoAggregatorStoreURI: store
+  redisHost: "commerce-next-stg-basket.uhkapr.ng.0001.euw1.cache.amazonaws.com"

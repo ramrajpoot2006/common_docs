@@ -1,0 +1,85 @@
+# DEFAULT scoped values - lowest precedence (on match, overwritten by CLUSTER and REGION scoped values)
+? image
+? hostname
+? pullSecret
+
+service:
+  type: ClusterIP
+
+deployment:
+  replicas:
+    min: 5
+    max: 15
+  resources:
+    requests:
+      memory: '1920Mi'
+      cpu: '1'
+    limits:
+      memory: '2110Mi'
+      cpu: '1500m'
+
+global:
+  name: shipping-service
+  apiPort: 8080
+  postgresDb:  "shipping"
+  postgresPort: "5432"
+  loggingLevelApi: "DEBUG"
+  loggingLevelPostgres: "INFO"
+  leanxId: "af1ddeb1-070c-43b6-8cd4-82c60b18e1b8"
+  logBody: false
+  dbMigrationPath: classpath:db/migration
+  ssmStoreRadius: 50km
+  ssmStorePage: 0
+  ssmStorePageSize: 20
+  httpConnectTimeoutMillis: "1000"
+  dpeHttpReadTimeoutMillis: "10000"
+  ssmHttpReadTimeoutMillis: "3000"
+  pudoAggHttpReadTimeoutMillis: "3000"
+  geoHttpReadTimeoutMillis: "3000"
+  httpMaxConnections: "500"
+  httpMaxIdleTimeSec: "180"
+  httpMaxLifeTimeSec: "180"
+  httpAcquireTimeoutSec: "60"
+  httpEvictSec: "30"
+  otelExportEndpoint: null
+  otelResourceAttribute: service.name=shipping-service
+  otelTracesExporter: none
+  googleApiHost: https://maps.googleapis.com
+  googleApiUri: maps/api/geocode/json
+  pudoAggRadius: 25
+  addressLinesPostboxJsonContent: '{"PO Box","P.O","P. O","P O","P.o","p.o","p.O","po box","Post Office","PO box","p o BOX","p o Box","p o","P o","p O","P O BOX","PO BOX","POSTOFFICE","POST OFFICE","Po Box","post office","postoffice","p . O","p . o","P . O","P . o","Post office","Postbox","Post box","Post-box"}'
+  uspsShippingMethodCarriers: '[{ "carrierString": "USP000US0000000000", "carrierService": "PP (Parcel Post)"}]'
+  uspsShippingMethodChannels: '{"adidasConsumerApp","adidasconfirmedapp","Web","mobile"}'
+  militaryStatesJsonContent: '{"AA","AE","AP"}'
+
+pdb:
+  enabled: true
+  minAvailable: "70%"
+
+# Basic authentication on the ingress can be configured in two ways:
+# 1. Define the unencrypted user credentials in 'basicAuth.users'
+#    This method is used if 'basicAuth.users' is not empty.
+#
+#    Example:
+#
+#      basicAuth:
+#        enabled: true
+#        users:
+#          username: pass
+#
+# 2. Use the user credentials from a secret managed by Fortanix.
+#    This method is used if 'basicAuth.enabled' is 'true' and there's
+#    no 'basicAuth.users' defined.
+#
+#    The secret containing the user credentials is managed in the pipeline
+#    with 'fortanix.sync()'.
+#    By default the secret is named {{ .Release.Name }}, and it should
+#    have a 'data.auth' key, containing the htpasswd generated, base64
+#    encoded data.
+#    Creating an 'auth' security object (OPAQUE) in Fortanix KMS for
+#    your scope is sufficient, the rest is handled in 'fortanix.sync()'.
+#
+#    Example:
+#
+#      basicAuth:
+#        enabled: true

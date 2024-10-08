@@ -1,0 +1,249 @@
+{{- if (eq .Release.Name "shipping-service")}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Release.Name }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/app: "{{ .Release.Name }}"
+  strategy:
+    # indicate which strategy we want for rolling update
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/app: "{{ .Release.Name }}"
+      annotations:
+        prometheus.io/port: "{{ .Values.global.apiPort }}"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+        - name: {{ .Values.global.name }}
+          image: {{ .Values.global.registry }}/{{ .Values.global.image }}
+          command: ["/bin/sh"]
+          args: ["-c", "java -Dsun.net.inetaddr.ttl=60 -Djava.security.egd=file:/dev/./urandom \
+            -XX:+IgnoreUnrecognizedVMOptions \
+            -XX:+PerfDisableSharedMem \
+            -XX:+HeapDumpOnOutOfMemoryError \
+            -XX:+ExitOnOutOfMemoryError \
+            -XX:+UseG1GC \
+            -XX:+UnlockExperimentalVMOptions \
+            -XX:+UseCGroupMemoryLimitForHeap \
+            -XX:MaxRAMFraction=2 \
+            -XX:+UseStringDeduplication \
+            -DETG_ENV=${ENVIRONMENT} \
+            -Dspring.profiles.active=${ENVIRONMENT} \
+            -Djavax.net.ssl.trustStore=/etc/ssl/certs/rds-truststore.jks \
+            -Djavax.net.ssl.trustStorePassword=${JKS_PASSWORD} \
+            ${JVM_DEBUG_PORT:+-agentlib:jdwp=transport=dt_socket,address=$JVM_DEBUG_PORT,server=y,suspend=n} \
+            -javaagent:opentelemetry-javaagent.jar \
+            -jar /var/app/app.jar"]
+          ports:
+            - name: service-port
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: service-port
+            initialDelaySeconds: 200
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: service-port
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "{{ .Values.deployment.resources.requests.memory }}"
+              cpu: "{{ .Values.deployment.resources.requests.cpu }}"
+            limits:
+              memory: "{{ .Values.deployment.resources.limits.memory }}"
+              cpu: "{{ .Values.deployment.resources.limits.cpu }}"
+          env:
+              - name: ENVIRONMENT
+                value: "{{ .Values.global.node.env }}"
+              - name: IMAGE
+                value: "{{ .Values.global.image }}"
+              - name: GIT_COMMIT
+                value: "{{ .Values.global.commit }}"
+              - name: POSTGRES_NAME
+                value: "{{ .Values.global.postgresDb }}"
+              - name: POSTGRES_PORT
+                value: "{{ .Values.global.postgresPort }}"
+              - name: POSTGRES_WRITER_HOST
+                value: "{{.Values.global.postgresWriterHost}}"
+              - name: POSTGRES_READER_HOST
+                value: "{{.Values.global.postgresReaderHost}}"
+              - name: POSTGRES_ARGS
+                value: "{{ .Values.global.postgresArgs }}"
+              - name: POSTGRES_WRITER_INITIAL_SIZE
+                value: "{{.Values.global.postgresWriterInitialSize}}"
+              - name: POSTGRES_WRITER_MAX_SIZE
+                value: "{{.Values.global.postgresWriterMaxSize}}"
+              - name: POSTGRES_WRITER_MAX_IDLE_TIME_MIN
+                value: "{{.Values.global.postgresWriterMaxIdleTimeMin}}"
+              - name: POSTGRES_WRITER_MAX_CREATE_CONN_TIME_SEC
+                value: "{{.Values.global.postgresWriterMaxCreateConnTimeSec}}"
+              - name: POSTGRES_READER_INITIAL_SIZE
+                value: "{{.Values.global.postgresReaderInitialSize}}"
+              - name: POSTGRES_READER_MAX_SIZE
+                value: "{{.Values.global.postgresReaderMaxSize}}"
+              - name: POSTGRES_READER_MAX_IDLE_TIME_MIN
+                value: "{{.Values.global.postgresWriterMaxIdleTimeMin}}"
+              - name: POSTGRES_READER_MAX_CREATE_CONN_TIME_SEC
+                value: "{{.Values.global.postgresReaderMaxCreateConnTimeSec}}"
+              - name: LEANX_ID
+                value: "{{ .Values.global.leanxId }}"
+              - name: LOGGING_LEVEL_API
+                value: "{{ .Values.global.loggingLevelApi }}"
+              - name: LOGGING_LEVEL_POSTGRES
+                value: "{{ .Values.global.loggingLevelPostgres }}"
+              - name: LOG_BODY
+                value: "{{ .Values.global.logBody }}"  
+              - name: DB_MIGRATION_PATH
+                value: "{{ .Values.global.dbMigrationPath }}"
+              - name: DPE_HOST
+                value: "{{ .Values.global.dpe_host }}"
+              - name: DPE_URI
+                value: "{{ .Values.global.dpe_uri }}"
+              - name: DPE_MS_HOST
+                value: "{{ .Values.global.dpe_ms_host }}"
+              - name: DPE_MS_URI
+                value: "{{ .Values.global.dpe_ms_uri }}"
+              - name: CNC_HOST
+                value: "{{ .Values.global.cncHost }}"
+              - name: CNC_URI
+                value: "{{ .Values.global.cncUri }}"
+              - name: DPE_FAILOVER_HOST
+                value: "{{ .Values.global.dpe_failover_host }}"
+              - name: DPE_FAILOVER_URI
+                value: "{{ .Values.global.dpe_failover_uri }}"
+              - name: SSM_STORE_HOST
+                value: "{{ .Values.global.ssmStoreHost }}"
+              - name: SSM_STORE_URI
+                value: "{{ .Values.global.ssmStoreUri }}"
+              - name: PUDO_AGG_HOST
+                value: "{{ .Values.global.pudoAggregatorHost }}"
+              - name: PUDO_AGG_URI
+                value: "{{ .Values.global.pudoAggregatorLocationSearchURI }}"
+              - name: PUDO_AGG_RADIUS
+                value: "{{ .Values.global.pudoAggRadius }}"
+              - name: PUDO_AGG_STORE_URI
+                value: "{{ .Values.global.pudoAggregatorStoreURI }}" 
+              - name: GOOGLE_API_HOST
+                value: "{{ .Values.global.googleApiHost }}"
+              - name: GOOGLE_API_URI
+                value: "{{ .Values.global.googleApiUri }}"
+              - name: HTTP_CONNECT_TIMEOUT_MILLIS
+                value: "{{ .Values.global.httpConnectTimeoutMillis }}"
+              - name: DPE_HTTP_READ_TIMEOUT_MILLIS
+                value: "{{ .Values.global.dpeHttpReadTimeoutMillis }}"
+              - name: SSM_HTTP_READ_TIMEOUT_MILLIS
+                value: "{{ .Values.global.ssmHttpReadTimeoutMillis }}"
+              - name: PUDO_AGG_HTTP_READ_TIMEOUT_MILLIS
+                value: "{{ .Values.global.pudoAggHttpReadTimeoutMillis }}"
+              - name: GEO_HTTP_READ_TIMEOUT_MILLIS
+                value: "{{ .Values.global.geoHttpReadTimeoutMillis }}"
+              - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+                value: {{ .Values.global.otelExportEndpoint }}
+              - name: OTEL_RESOURCE_ATTRIBUTES
+                value: {{ .Values.global.otelResourceAttribute }}
+              - name: OTEL_TRACES_EXPORTER
+                value: {{ .Values.global.otelTracesExporter }}
+              - name: HTTP_MAX_CONNECTIONS
+                value: "{{ .Values.global.httpMaxConnections }}"
+              - name: HTTP_CONN_MAX_IDLE_TIME_SEC
+                value: "{{ .Values.global.httpMaxIdleTimeSec }}"
+              - name: HTTP_MAX_CONN_LIFE_TIME_SEC
+                value: "{{ .Values.global.httpMaxLifeTimeSec }}"
+              - name: HTTP_ACQUIRE_TIMEOUT_SEC
+                value: "{{ .Values.global.httpAcquireTimeoutSec }}"
+              - name: HTTP_EVICT_SEC
+                value: "{{ .Values.global.httpEvictSec }}"	
+              - name: PUDO_ID_AGG_URI
+                value: "{{ .Values.global.pudoIdAggregatorLocationSearchURI }}"
+              - name: REDIS_HOST
+                value: "{{ .Values.global.redisHost }}"
+              - name: REDIS_PORT
+                value: "{{ .Values.global.redisPort }}"
+              - name: CACHE_EXPIRY_SECONDS
+                value: "{{ .Values.global.cacheExpirySeconds }}"
+              - name: PUDO_AGG_STORE_PAGE
+                value: "{{ .Values.global.ssmStorePage }}"
+              - name: PUDO_AGG_STORE_PAGE_SIZE
+                value: "{{ .Values.global.ssmStorePageSize }}"
+              - name: SSM_STORE_RADIUS
+                value: "{{ .Values.global.ssmStoreRadius }}"
+              - name: SSM_STORE_PAGE
+                value: "{{ .Values.global.ssmStorePage }}"
+              - name: SSM_STORE_PAGE_SIZE
+                value: "{{ .Values.global.ssmStorePageSize }}"
+              - name: ADDRESS_LINES_POSTBOX-JSON-CONTENT
+                value: {{ .Values.global.addressLinesPostboxJsonContent | toJson }}
+              - name: USPS-CARRIERS
+                value: {{ .Values.global.uspsShippingMethodCarriers | quote }}
+              - name: CHANNELS
+                value: {{ .Values.global.uspsShippingMethodChannels | toJson }}
+              - name: MILITARY-STATES-JSON-CONTENT
+                value: {{ .Values.global.militaryStatesJsonContent | toJson }}
+              - name: SECRET_RDS_SHIPPING_USER_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_rds-shipping-user-username
+              - name: SECRET_RDS_SHIPPING_USER_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_rds-shipping-user-password
+              - name: SECRET_DPE_STH_APPID
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_dpe-STH-appID
+              - name: SECRET_DPE_MS_API_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_dpe-ms-apiKey
+              - name: SECRET_DPE_CNC_APPID
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_dpe-CnC-appID
+              - name: SECRET_DPE_FAILOVER_APPID
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_dpe-failover-appID
+              - name: SECRET_SSM_STORE_APIKEY
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_ssm-store-apikey
+              - name: SECRET_SSM_STORE_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_ssm-store-secret
+              - name: SECRET_PUDO_AGG_AUTHORIZATION
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_pudo-agg-authorization      
+              - name: SECRET_GOOGLE_API_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: "{{ .Release.Name }}"
+                    key: secret_google-api-key
+      imagePullSecrets:
+         - name: {{ .Values.global.pullSecret }}
+{{- end}}

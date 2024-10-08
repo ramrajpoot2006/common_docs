@@ -1,0 +1,34 @@
+First time when docker is running, run the command -> docker-compose up -d --build THEN getting below error,
+
+Pulling zookeeper (registry-dub.tools.3stripes.net/eft-wm-commerce-next/cp-zookeeper:5.5.1)...
+error parsing HTTP 403 response body: invalid character 'N' looking for beginning of value: "Not allowed"
+
+
+1: Security Error
+
+Failed to execute goal org.apache.maven.plugins:maven-resources-plugin:3.2.0:resources (default-resources) on project basket-api: 
+Execution default-resources of goal org.apache.maven.plugins:maven-resources-plugin:3.2.0:resources failed: 
+Plugin org.apache.maven.plugins:maven-resources-plugin:3.2.0 or one of its dependencies could not be resolved: 
+Could not transfer artifact org.apache.maven:maven-settings-builder:jar:3.1.0 from/to central (https://repo.maven.apache.org/maven2): 
+Transfer failed for https://repo.maven.apache.org/maven2/org/apache/maven/maven-settings-builder/3.1.0/maven-settings-builder-3.1.0.jar: 
+PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target 
+
+Failed to execute goal on project basket-api: Could not resolve dependencies for project com.adidas.next:basket-api:jar:0.0.1-SNAPSHOT: 
+Could not transfer artifact org.springframework.boot:spring-boot-autoconfigure:jar:2.4.2 from/to central (https://repo.maven.apache.org/maven2): 
+Transfer failed for https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-autoconfigure/2.4.2/spring-boot-autoconfigure-2.4.2.jar: 
+PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target -> [Help 1]
+
+
+Solution: 
+	Add this line in docker file: -Dmaven.wagon.http.ssl.insecure=true
+	RUN mvn install -Dmaven.wagon.http.ssl.insecure=true
+
+2: Test case
+		  DockerFile -> RUN mvn install -Dmaven.wagon.http.ssl.insecure=true -DskipTests=true
+		  
+3: unauthorized to access repository: eft-wm-commerce-next/cp-zookeeper, action: pull
+
+			docker pull confluentinc/cp-kafka:5.5.1
+			docker pull confluentinc/cp-zookeeper:5.5.1
+			docker tag confluentinc/cp-zookeeper:5.5.1 registry-dub.tools.3stripes.net/eft-wm-commerce-next/cp-zookeeper:5.5.1
+			docker tag confluentinc/cp-kafka:5.5.1 registry-dub.tools.3stripes.net/eft-wm-commerce-next/cp-kafka:5.5.1

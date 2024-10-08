@@ -1,0 +1,68 @@
+server:
+  compression:
+    enabled: true
+spring:
+  r2dbc:
+    writer:
+      url: r2dbc:postgresql://postgres:postgre-s3cr3t@172.17.0.2:5432/shipping
+    reader:
+      url: r2dbc:postgresql://postgres:postgre-s3cr3t@172.17.0.2:5432/shipping
+  flyway:
+    enabled: false
+    url: jdbc:postgresql://172.17.0.2:5432/shipping?user=postgres&password=postgre-s3cr3t
+    locations: "classpath:db/migration"
+management:
+  metrics:
+    web:
+      client:
+        request:
+          metric-name: afn_fulfilment_service_http_client_requests
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,info
+  health:
+    r2dbc:
+      enabled: false
+  info:
+    env:
+      enabled: true
+logging:
+  level:
+    com.adidas.next.shippingapi: TRACE
+    org:
+      postgres: ERROR
+  env: local
+  leanx-id: abc
+geowebclient:
+  timeout:
+    read-millis: 3000
+
+reactor:
+  netty:
+    pool:
+      max-connections: 10
+      max-idle-time-sec: 10
+      max-life-time-sec: 10
+      acquire-timeout-sec: 10
+      evict-sec: 10
+
+info:
+  app:
+    env: ${logging.env}
+    git_commit: "1234"
+    image: "eft-wm-commerce-next/shipping-service:local"
+    db_name: "shipping"
+
+address-lines-postbox-config:
+  json-content: '{"PO Box","P.O","P. O","P O","P.o","p.o","p.O","po box","Post Office","PO box","p o BOX","p o Box","p o","P o","p O","P O BOX","PO BOX","POSTOFFICE","POST OFFICE","Po Box","post office","postoffice","p . O","p . o","P . O","P . o","Post office","Postbox","Post box","Post-box"}'
+
+usps-shipping-method-config: 
+ carriers: '[{ "carrierString": "USP000US0000000000", "carrierService": "PP (Parcel Post)"}]'
+ channels: '{"adidasConsumerApp","adidasconfirmedapp","Web","mobile"}'
+
+military-states-config:
+  json-content: '{"AA","AE","AP"}'

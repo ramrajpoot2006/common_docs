@@ -1,0 +1,57 @@
+JKT
+
+Tavant **********************
+UAN No: 100029442096
+pwd: Indiagate#123
+
+
+Below UAN is common for HCL, NTT Data & Accenture*********
+
+UAN: 100717546738
+PF:  TNAMB0048353
+pwd: Spiderman#1234
+A/C: 911010035507107	
+Emp id: 10297753
+
+Accenture
+
+UAN:
+PF: MHBAN00456650001332863
+EstablishmentID: GN GGN 0026854 000
+
+PF transfer video: https://www.youtube.com/watch?v=ev4WmUDKlqo
+DOE of exit video: https://www.youtube.com/watch?v=ZnjyBppQt4Q
+
+https://www.quora.com/What-is-an-EPFO-establishment-ID   - good example ****
+https://www.epfguide.com/know-company-epf-code/   : How to get establishment id
+https://www.hrcabin.com/pf-number-format/ : details explanation of PF number --> get establishment & extension code
+
+PF:	TN AMB 0048353
+Region code: 1st two digit -->TN
+Office code: next 3 letters -->AMB
+Establishment code:	next 7 digit -->0048353
+
+Member ID: GNGGN00268540000048353  //MRNOI00268540000048353
+
+PF transfer steps
+https://www.epfindia.gov.in/site_en/For_Employees.php
+One employee -> one EPF account
+
+https://unifiedportal-mem.epfindia.gov.in/memberinterface/    --- Login here
+
+
+
+
+TNAMB00483530001015757 :NTT
+NTT DATA INFORMATION PROCESSING SERVICES PRIVATE LIMITED,DLF-2 GKS TECH PARK,4,5TH FLOOR, 6TH BLOCK, DLF IT PARK, RAMAPURAM. CHENNAI CHENNAI
+
+MHBAN00456650001332863 :Accenture
+
+View -->Profile ->Father name
+
+TNAMB00483530001015757 -->TNAMB0048353000(es) -->NTT DATA INFORMATION PROCESSING SERVICES PRIVATE LIMITED
+withdrawal
+Claim track id: 10071754673805002
+
+NTT: 
+10078747XXXX 
