@@ -1,0 +1,672 @@
+# This file is a template, and might need editing before it works on your project.
+# This is a sample GitLab CI/CD configuration file that should run without any modifications.
+# It demonstrates a basic 3 stage CI/CD pipeline. Instead of real tests or scripts,
+# it uses echo commands to simulate the pipeline execution.
+#
+# A pipeline is composed of independent jobs that run scripts, grouped into stages.
+# Stages run in sequential order, but jobs within stages run in parallel.
+#
+# For more information, see: https://docs.gitlab.com/ee/ci/yaml/index.html#stages
+#
+# You can copy and paste this template into a new `.gitlab-ci.yml` file.
+# You should not add this template to an existing `.gitlab-ci.yml` file by using the `include:` keyword.
+#
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+
+variables:
+  # `showDateTime` will show the passed time in milliseconds. You need to specify `--batch-mode` to make this work.
+  MAVEN_OPTS: >-
+    -Dhttps.protocols=TLSv1.2
+    -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
+    -Dorg.slf4j.simpleLogger.showDateTime=true
+    -Djava.awt.headless=true
+
+  # As of Maven 3.3.0 instead of this you MAY define these options in `.mvn/maven.config` so the same config is used
+  # when running from the command line.
+  # As of Maven 3.6.1, the use of `--no-tranfer-progress` (or `-ntp`) suppresses download and upload messages. The use
+  # of the `Slf4jMavenTransferListener` is no longer necessary.
+  # `installAtEnd` and `deployAtEnd` are only effective with recent version of the corresponding plugins.
+  MAVEN_CLI_OPTS: >-
+    --batch-mode
+    --errors
+    --fail-at-end
+    --show-version
+    --no-transfer-progress
+    -DinstallAtEnd=true
+    -DdeployAtEnd=true
+
+image: node:18.14.0
+
+# Cache downloaded dependencies and plugins between builds.
+# To keep cache across branches add 'key: "$CI_JOB_NAME"'
+# Be aware that `mvn deploy` will install the built jar into this repository. If you notice your cache size
+# increasing, consider adding `-Dmaven.install.skip=true` to `MAVEN_OPTS` or in `.mvn/maven.config`
+# cache:
+#   paths:
+#     - .m2/repository
+
+stages:
+  - build
+  - package
+  - deploy
+  - test
+  - verify
+  - sonarqube-check
+  - sonarqube-vulnerability-report
+  # # - analyze
+  # - release
+  # before_script:
+  #   - export MAVEN_USER_HOME=`pwd`/.maven
+
+  # nohttp:
+  #   stage: check
+  #   script:
+  #     - cd server
+  #     - ./mvnw -ntp checkstyle:check -Dmaven.repo.local=$MAVEN_USER_HOME
+
+angular-install-dev-1:
+  stage: build
+  tags:
+    - starfish-dev1  
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/
+  before_script:
+    - node -v
+    - cd ~
+    - hostname
+    - npm config set @rds:registry https://code.roche.com/api/v4/packages/npm/
+    - npm config set //code.roche.com/api/v4/packages/npm/:_authToken ${CI_JOB_TOKEN}
+  script:
+    - cd $CI_PROJECT_DIR/client
+    - ls -ltra
+    - npm install
+  only:
+    - dev
+  when: manual
+
+client-package-dev-1:
+  stage: package
+  tags:
+    - starfish-dev1
+  needs:
+    - angular-install-dev-1
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/
+  before_script:
+    - cd client    
+  script:
+    - ls -ltra
+    - echo $CI_PROJECT_DIR
+    - npm run build:dev1
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/client/target/classes/static/
+    expire_in: 1 day
+  only:
+    - dev
+
+deploy-client-dev-1:
+  stage:  deploy
+  needs:
+    - client-package-dev-1
+  tags:
+    - starfish-dev1
+  script:
+    - echo "Deploying application..."
+    - echo "Checking CloudFront distribution ID DEV 1..." $CF_DISTRIBUTION_ID_DEV_1
+    - echo  $CI_PROJECT_DIR
+    - ls
+    - echo "Removing current source files..."
+    - aws s3 rm --recursive s3://starfish-client-dev1
+    - echo "Uploading new source files..."
+    - aws s3 cp $CI_PROJECT_DIR/client/target/classes/static/. s3://starfish-client-dev1 --recursive
+    - echo "Done.."
+    - echo "Performing Cloudfront invalidation ..."
+    - aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_DEV_1 --paths "/*"
+    - echo "Cloudfront invalidation has been successfully performed!!"    
+  environment:
+    name: development
+  only:
+    - dev
+
+maven-compile-dev-1:
+  stage: build  
+  image: maven:3.8.6-jdk-11
+  tags:
+    - starfish-dev1
+  before_script:
+    - export MAVEN_USER_HOME=$CI_PROJECT_DIR/.m2/repository
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - ls
+    - mvn -Pprod clean -DskipTests
+    - 'mvn compile -Pprod -Dmaven.repo.local=$MAVEN_USER_HOME'
+  only:
+    - dev
+
+maven-package-dev-1:
+  stage: package
+  image: maven:3.8.6-jdk-11
+  tags:
+    - starfish-dev1
+  needs:
+    - maven-compile-dev-1
+  before_script:
+    - export MAVEN_USER_HOME=$CI_PROJECT_DIR/.m2/repository
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - echo $CI_PROJECT_DIR
+    - mvn -Pdev1 clean package -DskipTests -Dmaven.repo.local=$MAVEN_USER_HOME
+    - ls $CI_PROJECT_DIR/server/target/
+    - mv $CI_PROJECT_DIR/server/target/starfish-${APP_VERSION}.war $CI_PROJECT_DIR/server/target/starfish.war
+    - ls $CI_PROJECT_DIR/server/target/
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/server/target/*.war
+    expire_in: 1 day
+  only:
+    - dev
+
+deploy-job-dev-1:      
+  stage: deploy      
+  tags:
+    - starfish-dev1
+  needs:
+    - maven-package-dev-1
+  script:
+    - echo "Deploying application to DEV 1 environment..."
+    - ls $CI_PROJECT_DIR/server/target/*.war
+    - whoami
+    - ftp-upload -h $APP_DEPLOY_ENV_DEV_1_URL --passive -u "tomcat" --password $tomcat_password -d /usr/local/tomcat9/webapps/ $CI_PROJECT_DIR/server/target/starfish.war
+  environment:
+    name: development
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'dev'
+
+angular-install-dev-2:
+  stage: build
+  tags:
+    - starfish-dev2  
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/    
+  before_script:
+    - node -v
+    - cd ~
+    - hostname
+    - npm config set @rds:registry https://code.roche.com/api/v4/packages/npm/
+    - npm config set ignore-scripts true
+    - npm config set //code.roche.com/api/v4/packages/npm/:_authToken ${CI_JOB_TOKEN}
+  script:
+    - cd $CI_PROJECT_DIR/client
+    - ls -ltra
+#    - sudo npm i -g rimraf
+    - npm install
+  only:
+    - dev
+  when: manual
+
+client-package-dev-2:
+  stage: package
+  tags:
+    - starfish-dev2
+  needs:
+    - angular-install-dev-2
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/
+  before_script:
+    - cd client    
+  script:
+    - ls -ltra
+    - echo $CI_PROJECT_DIR
+    - npm run build:dev2
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/client/target/classes/static/
+    expire_in: 1 day
+  only:
+    - dev
+  when: manual
+
+deploy-client-dev-2:
+  stage:  deploy
+  needs:
+    - client-package-dev-2
+  tags:
+    - starfish-dev2
+  script:
+    - echo "Deploying application..."
+    - echo "Checking CloudFront distribution ID DEV 2..." $CF_DISTRIBUTION_ID_DEV_2
+    - echo  $CI_PROJECT_DIR
+    - ls
+    - echo "Removing current source files..."
+    - aws s3 rm --recursive s3://starfish-client-dev2
+    - echo "Uploading new source files..."
+    - aws s3 cp $CI_PROJECT_DIR/client/target/classes/static/. s3://starfish-client-dev2 --recursive
+    - echo "Done.."
+    - echo "Performing Cloudfront invalidation ..."
+    - aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_DEV_2 --paths "/*"
+    - echo "Cloudfront invalidation has been successfully performed!!"    
+  environment:
+    name: development_2
+  only:
+    - dev
+  when: manual   
+
+maven-compile-dev-2:
+  stage: build  
+  image: maven:3.8.6-jdk-11
+  tags:
+    - starfish-dev2
+  before_script:
+    - export MAVEN_USER_HOME=$CI_PROJECT_DIR/.m2/repository
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - ls
+    - mvn -Pprod clean -DskipTests
+    - 'mvn compile -Pprod -Dmaven.repo.local=$MAVEN_USER_HOME'
+  only:
+    - dev
+
+maven-package-dev-2:
+  stage: package
+  image: maven:3.8.6-jdk-11
+  tags:
+    - starfish-dev2  
+  before_script:
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - echo $CI_PROJECT_DIR
+    - mvn -Pdev2 clean package -DskipTests -Dmaven.repo.local=$MAVEN_USER_HOME
+    - ls $CI_PROJECT_DIR/server/target/
+    - mv $CI_PROJECT_DIR/server/target/starfish-${APP_VERSION}.war $CI_PROJECT_DIR/server/target/starfish.war
+    - ls $CI_PROJECT_DIR/server/target/
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/server/target/*.war
+    expire_in: 1 day
+ only:
+    - dev
+
+deploy-job-dev-2: 
+  stage: deploy  
+  needs:
+    - maven-package-dev-2
+  tags:
+    - starfish-dev2
+  script:
+    - echo "Deploying application to DEV 2 environment..."
+    - ls $CI_PROJECT_DIR/server/target/*.war
+    - whoami
+    - ftp-upload -h $APP_DEPLOY_ENV_DEV_2_URL --passive -u "tomcat" --password $tomcat_password -d /usr/local/tomcat9/webapps/ $CI_PROJECT_DIR/server/target/starfish.war
+  environment:
+    name: development_2
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'dev'
+  when: manual
+
+angular-install-qa-1:
+  stage: build
+  tags:
+    - starfish-qa1  
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/
+  before_script:
+    - node -v
+    - cd ~
+    - hostname
+    - npm config set @rds:registry https://code.roche.com/api/v4/packages/npm/
+    - npm config set //code.roche.com/api/v4/packages/npm/:_authToken ${CI_JOB_TOKEN}
+  script:
+    - cd $CI_PROJECT_DIR/client
+    - ls -ltra
+    - npm install
+  only:
+    - /^release/.*$/
+  when: manual
+
+client-package-qa-1:
+  stage: package
+  tags:
+    - starfish-qa1
+  needs:
+    - angular-install-qa-1
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/
+  before_script:
+    - cd client    
+  script:
+    - ls -ltra
+    - echo $CI_PROJECT_DIR
+    - npm run build:qa1
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/client/target/classes/static/
+    expire_in: 1 day
+  only:
+    - /^release/.*$/
+  when: manual
+
+deploy-client-qa-1:
+  stage:  deploy
+  needs:
+    - client-package-qa-1
+  tags:
+    - starfish-qa1
+  script:
+    - echo "Deploying application..."
+    - echo "Checking CloudFront distribution ID QA 1..." $CF_DISTRIBUTION_ID_QA_1
+    - echo  $CI_PROJECT_DIR
+    - ls
+    - echo "Removing current source files..."
+    - aws s3 rm --recursive s3://starfish-client-qa1
+    - echo "Uploading new source files..."
+    - aws s3 cp $CI_PROJECT_DIR/client/target/classes/static/. s3://starfish-client-qa1 --recursive
+    - echo "Done.."
+    - echo "Performing Cloudfront invalidation ..."
+    - aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_QA_1 --paths "/*"
+    - echo "Cloudfront invalidation has been successfully performed!!"    
+  environment:
+    name: qa
+  only:
+    - /^release/.*$/
+  when: manual     
+
+maven-compile-qa-1:
+  stage: build  
+  image: maven:3.8.6-jdk-11
+  tags:
+    - starfish-qa1
+  before_script:
+    - export MAVEN_USER_HOME=$CI_PROJECT_DIR/.m2/repository
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - ls
+    - mvn -Pprod clean -DskipTests
+    - 'mvn compile -Pprod -Dmaven.repo.local=$MAVEN_USER_HOME'
+  only:
+    - /^release/.*$/
+
+maven-package-qa:
+  stage: package
+  tags:
+    - starfish-qa1  
+  image: maven:3.8.6-jdk-11
+  before_script:
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - echo $CI_PROJECT_DIR
+    - mvn -Pqa clean package -DskipTests -Dmaven.repo.local=$MAVEN_USER_HOME
+    - ls $CI_PROJECT_DIR/server/target/
+    - mv $CI_PROJECT_DIR/server/target/starfish-${APP_VERSION}.war $CI_PROJECT_DIR/server/target/starfish.war
+    - ls $CI_PROJECT_DIR/server/target/
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/server/target/*.war
+    expire_in: 1 day
+  only:
+    - /^release/.*$/
+
+deploy-job-qa:     
+  stage: deploy  
+  needs:
+    - maven-package-qa
+  tags:
+    - starfish-qa1
+  script:
+    - echo "Deploying application to QA 1 environment..."
+    - ls $CI_PROJECT_DIR/server/target/*.war
+    - whoami
+    - sudo apt-get update -y
+    - sudo apt-get install -y ftp-upload
+    - ftp-upload -h $APP_DEPLOY_ENV_QA_1_URL --passive -u "tomcat" --password $tomcat_password -d /usr/local/tomcat9/webapps/ $CI_PROJECT_DIR/server/target/starfish.war
+  environment:
+    name: qa
+  only:
+    - /^release/.*$/
+  when: manual    
+
+angular-install-qa-2:
+  stage: build
+  tags:
+    - starfish-qa2-a
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/
+  before_script:
+    - node -v
+    - cd ~
+    - hostname
+    - npm config set @rds:registry https://code.roche.com/api/v4/packages/npm/
+    - npm config set //code.roche.com/api/v4/packages/npm/:_authToken ${CI_JOB_TOKEN}
+  script:
+    - cd $CI_PROJECT_DIR/client
+    - ls -ltra
+    - npm install
+  only:
+    - /^release/.*$/
+  when: manual
+
+client-package-qa-2:
+  stage: package
+  tags:
+    - starfish-qa2-a
+  needs:
+    - angular-install-qa-2
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/node_modules/
+  before_script:
+    - cd client    
+  script:
+    - ls -ltra
+    - echo $CI_PROJECT_DIR
+    - npm run build:qa2
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/client/target/classes/static/
+    expire_in: 1 day
+  only:
+    - /^release/.*$/
+  when: manual
+
+deploy-client-qa-2:
+  stage:  deploy
+  needs:
+    - client-package-qa-2
+  tags:
+    - starfish-qa2-a
+  script:
+    - echo "Deploying application..."
+    - echo "Checking CloudFront distribution ID QA 2..." $CF_DISTRIBUTION_ID_QA_2
+    - echo  $CI_PROJECT_DIR
+    - ls
+    - echo "Removing current source files..."
+    - aws s3 rm --recursive s3://starfish-client-qa2a
+    - echo "Uploading new source files..."
+    - aws s3 cp $CI_PROJECT_DIR/client/target/classes/static/. s3://starfish-client-qa2a --recursive
+    - echo "Done.."
+    - echo "Performing Cloudfront invalidation ..."
+    - aws cloudfront create-invalidation --distribution-id $CF_DISTRIBUTION_ID_QA_2 --paths "/*"
+    - echo "Cloudfront invalidation has been successfully performed!!"    
+  environment:
+    name: qa_2
+  only:
+    - /^release/.*$/
+  when: manual     
+
+maven-compile:
+  stage: build  
+  # tags:
+  #   - starfish
+  image: maven:3.8.6-jdk-11
+  cache:
+    paths:
+      - $CI_PROJECT_DIR/.m2/repository
+  before_script:
+    - export MAVEN_USER_HOME=$CI_PROJECT_DIR/.m2/repository
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - ls
+    - mvn -Pprod clean -DskipTests -Dmaven.repo.local=$MAVEN_USER_HOME
+    - 'mvn compile -Pprod -Dmaven.repo.local=$MAVEN_USER_HOME'
+
+maven-package-qa-2:
+  stage: package
+  tags:
+    - starfish-qa2-a
+  image: maven:3.8.6-jdk-11
+  before_script:
+    - cd server
+    - export APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+  script:
+    - echo $APP_VERSION
+    - echo $CI_PROJECT_DIR
+    - mvn -Pqa2 clean package -DskipTests -Dmaven.repo.local=$MAVEN_USER_HOME
+    - ls $CI_PROJECT_DIR/server/target/
+    - mv $CI_PROJECT_DIR/server/target/starfish-${APP_VERSION}.war $CI_PROJECT_DIR/server/target/starfish.war
+    - ls $CI_PROJECT_DIR/server/target/
+  artifacts:
+    paths:
+      - $CI_PROJECT_DIR/server/target/*.war
+    expire_in: 1 day
+  only:
+    - /^release/.*$/
+
+deploy-job-qa-2:      
+  stage: deploy     
+  needs:
+    - maven-package-qa-2
+  tags:
+    - starfish-qa2-a
+  script:
+    - echo "Deploying application to QA 1 environment..."
+    - ls $CI_PROJECT_DIR/server/target/*.war
+    - whoami
+    - sudo apt-get update -y
+    - sudo apt-get install -y ftp-upload
+    - ftp-upload -h $APP_DEPLOY_ENV_QA2_1A_URL --passive -u "tomcat" --password $tomcat_password -d /usr/local/tomcat9/webapps/ $CI_PROJECT_DIR/server/target/starfish.war
+    - ftp-upload -h $APP_DEPLOY_ENV_QA2_2A_URL --passive -u "tomcat" --password $tomcat_password -d /usr/local/tomcat9/webapps/ $CI_PROJECT_DIR/server/target/starfish.war
+    - ftp-upload -h $APP_DEPLOY_ENV_QA2_1B_URL --passive -u "tomcat" --password $tomcat_password -d /usr/local/tomcat9/webapps/ $CI_PROJECT_DIR/server/target/starfish.war
+    - ftp-upload -h $APP_DEPLOY_ENV_QA2_2B_URL --passive -u "tomcat" --password $tomcat_password -d /usr/local/tomcat9/webapps/ $CI_PROJECT_DIR/server/target/starfish.war
+  environment:
+    name: qa_2
+  only:
+    - /^release/.*$/
+  when: manual 
+     
+# maven-test:
+#   services:
+#     - docker:dind
+#   image: maven:3.8.6-jdk-11
+#   tags:
+#     - g7-1
+#   variables:
+#     # Instruct Testcontainers to use the daemon of DinD.
+#     DOCKER_HOST: 'tcp://docker:2375'
+#     # Improve performance with overlayfs.
+#     DOCKER_DRIVER: overlay2
+#   stage: test
+#   allow_failure: true
+#   script:
+#     - cd server
+#     - mvn verify -Pdev1 -Dmaven.repo.local=$MAVEN_USER_HOME
+#   artifacts:
+#     reports:
+#       junit:
+#         - $CI_PROJECT_DIR/server/target/surefire-reports/TEST-*.xml
+#         - $CI_PROJECT_DIR/server/target/failsafe-reports/TEST-*.xml
+#     paths:
+#       - $CI_PROJECT_DIR/server/target/surefire-reports
+#       - $CI_PROJECT_DIR/server/target/failsafe-reports
+#       - $CI_PROJECT_DIR/server/target/site
+#     expire_in: 1 day
+
+sonarqube-check:
+  stage: test
+  tags:
+    - starfish-dev1
+  image: maven:3.6.3-jdk-11
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  before_script:
+    - cd server
+  script: 
+    - mvn clean org.jacoco:jacoco-maven-plugin:prepare-agent install 
+    - mvn org.jacoco:jacoco-maven-plugin:report 
+    - mvn verify sonar:sonar -Dsonar.qualitygate.wait=true -Dsonar.projectKey=starfish_dev_starfish-app_AYYXqAM9vCS3P8R6wY4J -Dsonar.token=$SONAR_TOKEN -Dsonar.host.url=$SONAR_HOST_URL -DuserName=$SONAR_LOGIN -Dpassword=$SONAR_PASSWORD
+  allow_failure: true
+  only:
+    - merge_requests
+    - master
+    - dev
+  when: manual
+
+client-sonarqube-check:
+  stage: sonarqube-check
+  image: 
+    name: sonarsource/sonar-scanner-cli:5.0
+    entrypoint: [""]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  before_script:
+    - cd client
+  script: 
+    - echo $SONAR_TOKEN_FRONTEND
+    - sonar-scanner -Dsonar.token=$SONAR_TOKEN_FRONTEND -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.projectKey=starfish_frontend_AYYDkN7g-ihGsOpLS5a9
+  allow_failure: true
+  only:
+    - merge_requests
+    - master
+    - dev
+  when: manual
+
+client-sonarqube-vulnerability-report:
+  stage: sonarqube-vulnerability-report
+  tags:
+    - starfish-dev1
+  script:
+    - 'curl -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/issues/gitlab_sast_export?projectKey=starfish_frontend_AYYDkN7g-ihGsOpLS5a9&branch=${CI_COMMIT_BRANCH}&pullRequest=${CI_MERGE_REQUEST_IID}" -o gl-sast-sonar-report.json'
+  allow_failure: true
+  only:
+    - merge_requests
+    - master
+    - dev
+  artifacts:
+    expire_in: 1 day
+    reports:
+      sast: gl-sast-sonar-report.json
+  dependencies:
+    - client-sonarqube-check
